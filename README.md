@@ -81,13 +81,13 @@
 
 ### What is this
 
-A personal reflection tool for capturing thoughts on the fly. Trigger voice dictation on your iPhone with one tap, speak a thought, and it gets auto-polished (punctuation, typo fixes, title & tag extraction) and archived to a Notion database. Every Saturday, it auto-generates a structured weekly thinking review.
+A personal reflection tool for capturing thoughts on the fly. Trigger voice dictation on your iPhone with one tap, speak a thought, optionally tweak it on the spot, and it gets auto-polished (punctuation, typo fixes, mixed Chinese-English correction, title & tag extraction) and archived to a Notion database. Every Saturday, it auto-generates a structured weekly thinking review.
 
 Core idea: **minimize the friction of capture (one-tap voice), maximize the quality of what's retained (AI polish + weekly review).**
 
 ### Tech Stack
 
-- **Entry**: iOS Shortcuts (Dictate Text + Get Contents of URL — just two steps)
+- **Entry**: iOS Shortcuts (Dictate + on-the-spot edit + Get Contents of URL)
 - **Orchestration**: n8n (self-hosted)
 - **AI**: DeepSeek V4 (flash for note polishing, pro for weekly analysis)
 - **Storage**: Notion (two databases: daily reflections + weekly reviews)
