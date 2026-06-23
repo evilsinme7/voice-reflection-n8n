@@ -5,7 +5,7 @@
 
 由 **老柒 (Seven)** 构建 · Part of [seven-ai-lab](https://github.com/evilsinme7/seven-ai-lab)
 
-**当前版本 / Current: v1.1** · 迭代历史 / History → [CHANGELOG](./CHANGELOG.md)
+**当前版本 / Current: v1.2** · 迭代历史 / History → [CHANGELOG](./CHANGELOG.md)
 
 ---
 
@@ -71,6 +71,18 @@
 - **Notion 日期筛选的 past_week bug**：n8n Notion 节点处理 `past_week` 相对条件时会错误塞入时间戳导致报错。改用 `on_or_after` + 明确算出的日期更稳。
 - **时区**：不要依赖 n8n 实例的系统时区，在代码里强制按目标时区（UTC+8）计算，否则时段判断和日期会偏。
 
+### 快速复刻
+
+想快速搭一个类似的？最短路径：
+
+1. **下载** [`workflows/`](./workflows) 下的两个 JSON 文件。
+2. 在你自己的 n8n 里，新建 workflow → 右上角菜单 → **Import from File** → 选中 JSON，节点结构会一键重建。
+3. 替换占位符：打开导入后的节点，把 Notion / DeepSeek / Header Auth 三处凭证换成你自己的；把 `<daily-db-id>`、`<weekly-db-id>` 换成你的 Notion 数据库 ID。
+4. 按 [`SETUP.md`](./SETUP.md) 建好两个 Notion 数据库、配置 iOS 快捷指令（见 [`shortcut/`](./shortcut)）。
+5. Publish 两条 workflow，完成。
+
+> 你需要准备：一个 n8n 实例、一个 Notion integration、一个 DeepSeek API key、一台 iPhone。
+
 ### 复现指南
 
 见 [`SETUP.md`](./SETUP.md)。注意所有配置中的 URL、数据库 ID、凭证名均为占位符，需替换为你自己的。
@@ -81,13 +93,13 @@
 
 ### What is this
 
-A personal reflection tool for capturing thoughts on the fly. Trigger voice dictation on your iPhone with one tap, speak a thought, optionally tweak it on the spot, and it gets auto-polished (punctuation, typo fixes, mixed Chinese-English correction, title & tag extraction) and archived to a Notion database. Every Saturday, it auto-generates a structured weekly thinking review.
+A personal reflection tool for capturing thoughts on the fly. Trigger voice dictation on your iPhone with one tap, speak a thought, and it gets auto-polished (punctuation, typo fixes, title & tag extraction) and archived to a Notion database. Every Saturday, it auto-generates a structured weekly thinking review.
 
 Core idea: **minimize the friction of capture (one-tap voice), maximize the quality of what's retained (AI polish + weekly review).**
 
 ### Tech Stack
 
-- **Entry**: iOS Shortcuts (Dictate + on-the-spot edit + Get Contents of URL)
+- **Entry**: iOS Shortcuts (Dictate Text + Get Contents of URL — just two steps)
 - **Orchestration**: n8n (self-hosted)
 - **AI**: DeepSeek V4 (flash for note polishing, pro for weekly analysis)
 - **Storage**: Notion (two databases: daily reflections + weekly reviews)
@@ -107,6 +119,18 @@ Core idea: **minimize the friction of capture (one-tap voice), maximize the qual
 - **Notion getAll simple mode**: `simple:true` strips records to id/name/url only. Use `simple:false` for full data.
 - **Notion past_week bug**: The n8n Notion node mishandles `past_week`. Use `on_or_after` with an explicit date instead.
 - **Timezone**: Don't rely on the n8n instance's system timezone; compute against your target zone (UTC+8) explicitly.
+
+### Quick Start
+
+Want to build a similar one fast? Shortest path:
+
+1. **Download** the two JSON files under [`workflows/`](./workflows).
+2. In your own n8n: new workflow → top-right menu → **Import from File** → select a JSON; the node structure rebuilds in one step.
+3. Replace placeholders: swap the Notion / DeepSeek / Header Auth credentials for your own, and replace `<daily-db-id>` / `<weekly-db-id>` with your Notion database IDs.
+4. Follow [`SETUP.md`](./SETUP.md) to create the two Notion databases and configure the iOS Shortcut (see [`shortcut/`](./shortcut)).
+5. Publish both workflows. Done.
+
+> You'll need: an n8n instance, a Notion integration, a DeepSeek API key, and an iPhone.
 
 ### Setup
 

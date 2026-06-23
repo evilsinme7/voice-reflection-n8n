@@ -1,0 +1,114 @@
+{
+  "name": "Daily Reflection · Capture",
+  "nodes": [
+    {
+      "id": "node-webhook",
+      "name": "Receive Reflection",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [240, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reflection",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "responseData": "firstEntryJson"
+      },
+      "webhookId": "REPLACE_WITH_YOUR_WEBHOOK_ID",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_HEADER_AUTH_CREDENTIAL_ID",
+          "name": "<your-header-auth-credential>"
+        }
+      }
+    },
+    {
+      "id": "node-prepare",
+      "name": "Prepare Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const b = $json.body;\nlet raw = \"\";\nif (typeof b === \"string\") {\n  raw = b;\n} else if (b && typeof b === \"object\") {\n  raw = b.data || b.text || \"\";\n}\nraw = (raw || \"\").toString().trim();\n// Force UTC+8; do not rely on the n8n instance timezone\nconst nowUtc = new Date();\nconst cst = new Date(nowUtc.getTime() + 8 * 60 * 60 * 1000);\nconst hour = cst.getUTCHours();\nconst period = hour < 11 ? \"早\" : (hour < 17 ? \"午\" : \"晚\");\nconst pad = (n) => String(n).padStart(2, \"0\");\nconst iso = `${cst.getUTCFullYear()}-${pad(cst.getUTCMonth()+1)}-${pad(cst.getUTCDate())}T${pad(cst.getUTCHours())}:${pad(cst.getUTCMinutes())}:${pad(cst.getUTCSeconds())}+08:00`;\nreturn {\n  raw: raw,\n  period: period,\n  date: iso\n};"
+      }
+    },
+    {
+      "id": "node-polish",
+      "name": "AI Polish",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [680, 300],
+      "parameters": {
+        "promptType": "define",
+        "text": "=请处理以下文本，它来自语音转写，可能存在以下问题：缺少标点、有同音字错误、中英文混杂时英文单词或专有名词被错误识别（例如把英文词转成了发音相近的中文，或把中文专名拆错）。\n\n原始文本：{{ $json.raw }}\n\n请输出一个 JSON 对象，包含以下字段：\n- \"polished\"：润色后的文本。加上正确标点、修正错别字与同音字、结合上下文修正被错误识别的英文单词和专有名词、理顺语句。但必须保留原意和说话风格，不要扩写或改变观点。若某处难以确定原意，保持最接近原文的合理推断。\n- \"title\"：一句话标题，精炼概括核心内容，不超过20字。\n- \"tags\"：标签数组，从 [\"AI\",\"商业\",\"投资\",\"健康\",\"生活\",\"灵感\"] 中选择1-3个最相关的；如都不合适可新增简短标签。\n- \"summary\"：一两句话的要点摘要。\n\n只返回 JSON，不要任何额外说明或 markdown 代码块标记。",
+        "hasOutputParser": false
+      }
+    },
+    {
+      "id": "node-deepseek",
+      "name": "DeepSeek V4 Flash",
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [680, 500],
+      "parameters": {
+        "model": "deepseek-v4-flash",
+        "options": { "responseFormat": "json_object", "temperature": 0.3 }
+      },
+      "credentials": {
+        "deepSeekApi": {
+          "id": "REPLACE_WITH_YOUR_DEEPSEEK_CREDENTIAL_ID",
+          "name": "<your-deepseek-credential>"
+        }
+      }
+    },
+    {
+      "id": "node-parse",
+      "name": "Parse Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ai = $json;\nconst prep = $('Prepare Fields').item.json;\nlet polished = ai.polished;\nlet title = ai.title;\nlet tags = ai.tags;\nlet summary = ai.summary;\nif (polished === undefined && typeof ai.text === \"string\") {\n  try {\n    let s = ai.text.trim().replace(/^```json/i, \"\").replace(/^```/, \"\").replace(/```$/, \"\").trim();\n    const p = JSON.parse(s);\n    polished = p.polished; title = p.title; tags = p.tags; summary = p.summary;\n  } catch (e) {}\n}\nif (!Array.isArray(tags)) tags = [];\npolished = polished || prep.raw;\nreturn {\n  raw: prep.raw,\n  polished: polished,\n  title: (title || polished).toString().substring(0, 40) || \"（空）\",\n  summary: summary || \"\",\n  tags: tags.join(\",\"),\n  period: prep.period,\n  date: prep.date\n};"
+      }
+    },
+    {
+      "id": "node-notion",
+      "name": "Write to Notion",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [1120, 300],
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "create",
+        "databaseId": { "__rl": true, "mode": "id", "value": "<daily-db-id>" },
+        "title": "={{ $json.title }}",
+        "propertiesUi": {
+          "propertyValues": [
+            { "key": "原话|rich_text", "type": "rich_text", "textContent": "={{ $json.raw }}" },
+            { "key": "内容|rich_text", "type": "rich_text", "textContent": "={{ $json.polished }}" },
+            { "key": "摘要|rich_text", "type": "rich_text", "textContent": "={{ $json.summary }}" },
+            { "key": "标签|multi_select", "type": "multi_select", "multiSelectValue": "={{ $json.tags ? $json.tags.split(\",\").filter(t => t) : [] }}" },
+            { "key": "日期|date", "type": "date", "includeTime": true, "date": "={{ $json.date }}" },
+            { "key": "时段|select", "type": "select", "selectValue": "={{ $json.period }}" }
+          ]
+        }
+      },
+      "credentials": {
+        "notionApi": {
+          "id": "REPLACE_WITH_YOUR_NOTION_CREDENTIAL_ID",
+          "name": "<your-notion-credential>"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Receive Reflection": { "main": [[{ "node": "Prepare Fields", "type": "main", "index": 0 }]] },
+    "Prepare Fields": { "main": [[{ "node": "AI Polish", "type": "main", "index": 0 }]] },
+    "AI Polish": { "main": [[{ "node": "Parse Result", "type": "main", "index": 0 }]] },
+    "DeepSeek V4 Flash": { "ai_languageModel": [[{ "node": "AI Polish", "type": "ai_languageModel", "index": 0 }]] },
+    "Parse Result": { "main": [[{ "node": "Write to Notion", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

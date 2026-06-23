@@ -1,0 +1,138 @@
+{
+  "name": "Weekly Review",
+  "nodes": [
+    {
+      "id": "node-schedule",
+      "name": "Saturday Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [240, 300],
+      "parameters": {
+        "rule": { "interval": [{ "field": "weeks", "weeksInterval": 1, "triggerAtDay": [6], "triggerAtHour": 8, "triggerAtMinute": 0 }] }
+      }
+    },
+    {
+      "id": "node-calcdate",
+      "name": "Compute Start Date",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const nowUtc = new Date();\nconst cst = new Date(nowUtc.getTime() + 8 * 60 * 60 * 1000);\nconst pad = (n) => String(n).padStart(2, \"0\");\nconst start = new Date(cst.getTime() - 7 * 24 * 60 * 60 * 1000);\nconst startDate = `${start.getUTCFullYear()}-${pad(start.getUTCMonth()+1)}-${pad(start.getUTCDate())}`;\nconst end = new Date(cst);\nconst fmt = (d) => `${d.getUTCMonth()+1}/${d.getUTCDate()}`;\nconst startDisp = new Date(cst.getTime() - 6 * 24 * 60 * 60 * 1000);\nconst dateRange = `${fmt(startDisp)}-${fmt(end)}`;\nconst genDate = `${cst.getUTCFullYear()}-${pad(cst.getUTCMonth()+1)}-${pad(cst.getUTCDate())}`;\nreturn [{ json: { startDate: startDate, dateRange: dateRange, genDate: genDate } }];"
+      }
+    },
+    {
+      "id": "node-query",
+      "name": "Query This Week",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [640, 300],
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": { "__rl": true, "mode": "id", "value": "<daily-db-id>" },
+        "returnAll": true,
+        "simple": false,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": { "conditions": [{ "key": "日期|date", "type": "date", "condition": "on_or_after", "date": "={{ $json.startDate }}" }] }
+      },
+      "credentials": {
+        "notionApi": {
+          "id": "REPLACE_WITH_YOUR_NOTION_CREDENTIAL_ID",
+          "name": "<your-notion-credential>"
+        }
+      }
+    },
+    {
+      "id": "node-aggregate",
+      "name": "Aggregate Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nconst meta = $('Compute Start Date').first().json;\n\nfunction extractText(prop) {\n  if (prop == null) return \"\";\n  if (typeof prop === \"string\") return prop;\n  if (typeof prop === \"number\") return String(prop);\n  if (Array.isArray(prop)) {\n    return prop.map(p => {\n      if (typeof p === \"string\") return p;\n      if (p && p.plain_text) return p.plain_text;\n      if (p && p.text && p.text.content) return p.text.content;\n      if (p && p.name) return p.name;\n      return \"\";\n    }).filter(Boolean).join(\"、\");\n  }\n  if (typeof prop === \"object\") {\n    if (prop.plain_text) return prop.plain_text;\n    if (prop.text && prop.text.content) return prop.text.content;\n    if (prop.name) return prop.name;\n    if (Array.isArray(prop.rich_text)) return extractText(prop.rich_text);\n    if (Array.isArray(prop.title)) return extractText(prop.title);\n    if (Array.isArray(prop.multi_select)) return extractText(prop.multi_select);\n  }\n  return \"\";\n}\n\nfunction getField(j, name) {\n  if (j == null) return \"\";\n  if (j[name] !== undefined) return extractText(j[name]);\n  if (j.properties && j.properties[name] !== undefined) return extractText(j.properties[name]);\n  return \"\";\n}\n\nconst valid = [];\nfor (const it of items) {\n  const j = it.json;\n  const title = getField(j, \"标题\") || getField(j, \"name\");\n  const content = getField(j, \"内容\");\n  const summary = getField(j, \"摘要\");\n  const tags = getField(j, \"标签\");\n  if ((content && content.trim()) || (summary && summary.trim())) {\n    valid.push({ title, content: content || summary, tags });\n  }\n}\n\nconst count = valid.length;\nif (count === 0) {\n  return [{ json: { isEmpty: true, count: 0, dateRange: meta.dateRange, genDate: meta.genDate } }];\n}\nconst lines = valid.map((v, i) => `${i+1}. 【${v.title}】${v.content}${v.tags ? \"（标签：\" + v.tags + \"）\" : \"\"}`).join(\"\\n\");\nreturn [{ json: { isEmpty: false, count: count, records: lines, dateRange: meta.dateRange, genDate: meta.genDate } }];"
+      }
+    },
+    {
+      "id": "node-review",
+      "name": "AI Weekly Review",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [1040, 300],
+      "parameters": {
+        "promptType": "define",
+        "text": "=以下是我过去一周记录的感悟（共 {{ $json.count }} 条）：\n\n{{ $json.records }}\n\n请基于以上真实记录，生成一份专业、言简意赅的本周思考回顾，像一份给自己看的工作汇报。严格要求：\n1. 必须基于上述记录的实际内容，绝不能凭空发挥或谈论\"记录为空\"。\n2. 采用结构化分点格式，便于快速扫读。建议结构：\n   - 开头用一句话概述本周思考重心（不超过30字）。\n   - 然后分条列出，每条以「1. 」「2. 」「3. 」开头，每条聚焦一个主题或发现，先点出主题再简述洞察，控制在1-2句。\n   - 如有值得深挖的点，可在最后用「值得关注：」起一行简短提示。\n3. 语气专业、克制、信息密度高。禁止情绪化抒情、文学化渲染、空泛鼓励。\n4. 不要简单复述记录，要提炼主题、关联与思维倾向。\n\n请输出 JSON 对象：\n- \"review\"：回顾正文，按上述结构化格式，用\\n分隔各行/段，分点清晰\n- \"themes\"：主题标签数组，从 [\"AI\",\"商业\",\"投资\",\"健康\",\"生活\",\"灵感\"] 选最突出的1-3个\n- \"title\"：回顾标题，概括本周思考主线，不超过20字，专业平实，避免文学化修辞\n\n只返回 JSON，不要 markdown 代码块标记。",
+        "hasOutputParser": false
+      }
+    },
+    {
+      "id": "node-deepseek-pro",
+      "name": "DeepSeek V4 Pro",
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [1040, 500],
+      "parameters": {
+        "model": "deepseek-v4-pro",
+        "options": { "responseFormat": "json_object", "temperature": 0.4 }
+      },
+      "credentials": {
+        "deepSeekApi": {
+          "id": "REPLACE_WITH_YOUR_DEEPSEEK_CREDENTIAL_ID",
+          "name": "<your-deepseek-credential>"
+        }
+      }
+    },
+    {
+      "id": "node-parse-review",
+      "name": "Parse Review",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1240, 300],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ai = $json;\nconst agg = $('Aggregate Records').item.json;\nlet review = ai.review;\nlet themes = ai.themes;\nlet title = ai.title;\nif (review === undefined && typeof ai.text === \"string\") {\n  try {\n    let s = ai.text.trim().replace(/^```json/i, \"\").replace(/^```/, \"\").replace(/```$/, \"\").trim();\n    const p = JSON.parse(s);\n    review = p.review; themes = p.themes; title = p.title;\n  } catch (e) {}\n}\nif (!Array.isArray(themes)) themes = [];\nreturn {\n  title: title || `本周回顾 ${agg.dateRange}`,\n  review: review || \"\",\n  themes: themes.join(\",\"),\n  dateRange: agg.dateRange,\n  genDate: agg.genDate,\n  count: agg.count\n};"
+      }
+    },
+    {
+      "id": "node-write-review",
+      "name": "Write Review",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [1440, 300],
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "create",
+        "databaseId": { "__rl": true, "mode": "id", "value": "<weekly-db-id>" },
+        "title": "={{ $json.title }}",
+        "propertiesUi": {
+          "propertyValues": [
+            { "key": "日期范围|rich_text", "type": "rich_text", "textContent": "={{ $json.dateRange }}" },
+            { "key": "回顾正文|rich_text", "type": "rich_text", "textContent": "={{ $json.review }}" },
+            { "key": "本周主题|multi_select", "type": "multi_select", "multiSelectValue": "={{ $json.themes ? $json.themes.split(\",\").filter(t => t) : [] }}" },
+            { "key": "生成日期|date", "type": "date", "date": "={{ $json.genDate }}" },
+            { "key": "记录条数|number", "type": "number", "numberValue": "={{ $json.count }}" }
+          ]
+        }
+      },
+      "credentials": {
+        "notionApi": {
+          "id": "REPLACE_WITH_YOUR_NOTION_CREDENTIAL_ID",
+          "name": "<your-notion-credential>"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Saturday Trigger": { "main": [[{ "node": "Compute Start Date", "type": "main", "index": 0 }]] },
+    "Compute Start Date": { "main": [[{ "node": "Query This Week", "type": "main", "index": 0 }]] },
+    "Query This Week": { "main": [[{ "node": "Aggregate Records", "type": "main", "index": 0 }]] },
+    "Aggregate Records": { "main": [[{ "node": "AI Weekly Review", "type": "main", "index": 0 }]] },
+    "AI Weekly Review": { "main": [[{ "node": "Parse Review", "type": "main", "index": 0 }]] },
+    "DeepSeek V4 Pro": { "ai_languageModel": [[{ "node": "AI Weekly Review", "type": "ai_languageModel", "index": 0 }]] },
+    "Parse Review": { "main": [[{ "node": "Write Review", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

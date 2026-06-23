@@ -7,6 +7,29 @@ All notable changes to this project are documented here.
 
 ---
 
+## [v1.2] - 2026-06-23
+
+### 中文
+
+**主题：降低复刻门槛，让他人可快速搭建**
+
+#### 新增 (Added)
+- **可导入的 workflow JSON**：在 `workflows/` 下提供两条 workflow 的脱敏 JSON 文件（`workflow-a-capture.json`、`workflow-b-weekly-review.json`）。他人可在自己的 n8n 中通过 "Import from File" 一键导入节点结构，无需照着文档手动重搭。
+- **快速复刻指南**：README 新增 "快速复刻 / Quick Start" 段落，列出从导入到运行的最短路径。
+
+#### 说明
+- 所有 JSON 中的数据库 ID、webhook ID、凭证引用均替换为占位符（`<...>` / `REPLACE_WITH_...`），导入后需替换为自己的配置。
+
+### English
+
+**Theme: Lower the barrier to replication**
+
+#### Added
+- **Importable workflow JSON**: Sanitized JSON for both workflows under `workflows/`. Others can import the node structure directly via "Import from File" in their own n8n.
+- **Quick Start guide**: A new section in README outlining the shortest path from import to running.
+
+---
+
 ## [v1.1] - 2026-06-22
 
 ### 中文
